@@ -143,17 +143,42 @@ Never claim health, medical, slimming or safety outcomes. Never invent specs, ce
     },
   };
 
-  async function importFromUrl(apiKey, url) {
+  // Strip tracking junk so the fetch tool accepts the URL, and list fallback URLs to try.
+  function cleanUrl(raw) {
+    let u;
+    try { u = new URL(String(raw).trim()); } catch (_) { return { url: String(raw).trim(), alts: [] }; }
+    const host = u.hostname.replace(/^www\./, "");
+    let m;
+    if (/aliexpress\./.test(host) && (m = u.pathname.match(/\/item\/(\d+)\.html/))) {
+      const id = m[1];
+      return { url: `https://www.aliexpress.com/item/${id}.html`, alts: [`https://www.aliexpress.us/item/${id}.html`, `https://m.aliexpress.com/item/${id}.html`], id };
+    }
+    if (/amazon\./.test(host) && (m = u.pathname.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/i))) {
+      return { url: `https://${u.hostname}/dp/${m[1]}`, alts: [], id: m[1] };
+    }
+    if (/temu\.com$/.test(host)) return { url: `https://${u.hostname}${u.pathname}`, alts: [] };
+    if (/alibaba\.com$/.test(host)) return { url: `https://${u.hostname}${u.pathname}`, alts: [] };
+    if (/cjdropshipping\.com$/.test(host)) return { url: `https://${u.hostname}${u.pathname}`, alts: [] };
+    // Shopify and other stores: the path identifies the product; keep only an id-like param.
+    const keep = ["id", "variant", "itemId", "item_id"].filter((k) => u.searchParams.has(k)).map((k) => `${k}=${encodeURIComponent(u.searchParams.get(k))}`);
+    const out = `${u.protocol}//${u.hostname}${u.pathname}${keep.length ? "?" + keep.join("&") : ""}`;
+    const alts = /\/products\//.test(u.pathname) ? [`${u.protocol}//${u.hostname}${u.pathname.replace(/\/$/, "")}.json`] : [];
+    return { url: out, alts };
+  }
+
+  async function importFromUrl(apiKey, rawUrl) {
+    const { url, alts, id } = cleanUrl(rawUrl);
     return run(apiKey, {
       system: `You extract product data from a web page. Fetch the URL with web_fetch, then call import_product.
 Only report what is on the page. Never invent specs, prices, reviews or certifications. Drop health or medical claims.
-If the page can't be fetched (blocked, login, captcha) call import_product with ok=false and explain in error.`,
-      prompt: `Fetch this product page and import it: ${url}`,
-      tools: [{ type: "web_fetch_20260209", name: "web_fetch", max_uses: 3 }, IMPORT_PRODUCT],
+If the first URL fails or returns no product data, try the alternative URLs given. If all fail (blocked, login, captcha),
+call import_product with ok=false and explain in error.`,
+      prompt: `Fetch this product page and import it: ${url}${alts.length ? `\nAlternative URLs for the same product, try these if the first fails:\n${alts.join("\n")}` : ""}${id ? `\nProduct ID: ${id}` : ""}`,
+      tools: [{ type: "web_fetch_20260209", name: "web_fetch", max_uses: 4 }, IMPORT_PRODUCT],
       finalTool: "import_product",
       effort: "low",
-    });
+    }).then((o) => Object.assign(o, { cleanUrl: url }));
   }
 
-  window.ECI_AI = { findProducts, fillProduct, importFromUrl };
+  window.ECI_AI = { findProducts, fillProduct, importFromUrl, cleanUrl };
 })();

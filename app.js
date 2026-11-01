@@ -238,6 +238,7 @@
     try {
       const o = await window.ECI_AI.importFromUrl(AIKEY, url);
       if (!o.ok) { st.textContent = "⚠ " + (o.error || "Couldn't read that page.") + " Try the supplier's AliExpress/CJ link, or add photos by URL."; btn.disabled = false; return; }
+      if (o.cleanUrl) S.importUrl = o.cleanUrl;
       const c = ctx(), same = (o.currency || "").toUpperCase() === c.currency;
       const supplier = S.importKind !== "competitor";
       if (supplier) S.images = [...new Set([...(o.images || []), ...(S.images || [])])].slice(0, 10);
@@ -250,7 +251,7 @@
       if (o.price) {
         if (same) { if (supplier) { S.cost = String(o.price); S.costIsEstimate = false; } else S.compPrice = String(o.price); }
         else priceNote = ` Price on page: ${o.price} ${o.currency}. Convert it to ${c.currency} on the Numbers step.`;
-        S.evidence = [S.evidence, `${supplier ? "Supplier" : "Competitor"} listing ${url}: ${o.price} ${o.currency}.`].filter(Boolean).join(" ");
+        S.evidence = [S.evidence, `${supplier ? "Supplier" : "Competitor"} listing ${o.cleanUrl || url}: ${o.price} ${o.currency}.`].filter(Boolean).join(" ");
       }
       save(); render();
       const s2 = $("#import-status");
