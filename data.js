@@ -4,17 +4,36 @@
  * (supplier quote, competitor price, Ad Library / Amazon signals) in step 2.
  */
 window.ECI_DATA = {
+  // usd = approximate units of local currency per 1 USD (for converting database prices; check current rates)
   countries: [
-    { code: "US", name: "United States", currency: "USD", symbol: "$" },
-    { code: "GB", name: "United Kingdom", currency: "GBP", symbol: "£" },
-    { code: "CA", name: "Canada", currency: "CAD", symbol: "$" },
-    { code: "AU", name: "Australia", currency: "AUD", symbol: "$" },
-    { code: "DE", name: "Germany", currency: "EUR", symbol: "€" },
-    { code: "FR", name: "France", currency: "EUR", symbol: "€" },
-    { code: "NL", name: "Netherlands", currency: "EUR", symbol: "€" },
-    { code: "AE", name: "United Arab Emirates", currency: "AED", symbol: "AED " },
-    { code: "SA", name: "Saudi Arabia", currency: "SAR", symbol: "SAR " },
+    { code: "US", name: "United States", currency: "USD", symbol: "$", usd: 1 },
+    { code: "GB", name: "United Kingdom", currency: "GBP", symbol: "£", usd: 0.78 },
+    { code: "CA", name: "Canada", currency: "CAD", symbol: "$", usd: 1.38 },
+    { code: "AU", name: "Australia", currency: "AUD", symbol: "$", usd: 1.52 },
+    { code: "DE", name: "Germany", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "FR", name: "France", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "NL", name: "Netherlands", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "DK", name: "Denmark", currency: "DKK", symbol: "DKK ", target: 70, feeFixed: 1.8, usd: 6.85 },
+    { code: "SE", name: "Sweden", currency: "SEK", symbol: "SEK ", target: 100, feeFixed: 2, usd: 10.6 },
+    { code: "NO", name: "Norway", currency: "NOK", symbol: "NOK ", target: 100, feeFixed: 2.5, usd: 10.9 },
+    { code: "FI", name: "Finland", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "IE", name: "Ireland", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "BE", name: "Belgium", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "AT", name: "Austria", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "ES", name: "Spain", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "IT", name: "Italy", currency: "EUR", symbol: "€", usd: 0.92 },
+    { code: "CH", name: "Switzerland", currency: "CHF", symbol: "CHF ", usd: 0.86 },
+    { code: "PL", name: "Poland", currency: "PLN", symbol: "PLN ", target: 40, feeFixed: 1.2, usd: 3.95 },
+    { code: "NZ", name: "New Zealand", currency: "NZD", symbol: "$", usd: 1.68 },
+    { code: "AE", name: "United Arab Emirates", currency: "AED", symbol: "AED ", target: 35, feeFixed: 1, usd: 3.67 },
+    { code: "SA", name: "Saudi Arabia", currency: "SAR", symbol: "SAR ", target: 35, feeFixed: 1, usd: 3.75 },
   ],
+
+  // AdSpy Pro category -> wizard niche id
+  nicheMap: { "Pet Supplies": "pets", "Home & Living": "home", "Sports": "fitness", "Automotive": "car", "Electronics": "desk", "Baby & Kids": "baby", "Toys": "toys", "Fashion": "fashion", "Jewelry": "jewelry", "Beauty": "beauty" },
+
+  // Amazon domain per selling country (for live research links)
+  amazon: { US: "amazon.com", GB: "amazon.co.uk", IE: "amazon.co.uk", CA: "amazon.ca", AU: "amazon.com.au", DE: "amazon.de", AT: "amazon.de", CH: "amazon.de", DK: "amazon.de", FR: "amazon.fr", BE: "amazon.com.be", NL: "amazon.nl", SE: "amazon.se", NO: "amazon.se", FI: "amazon.de", ES: "amazon.es", IT: "amazon.it", PL: "amazon.pl", AE: "amazon.ae", SA: "amazon.sa", NZ: "amazon.com.au" },
 
   suppliers: ["AutoDS", "CJ Dropshipping", "Zendrop", "Team Drop", "Private agent", "Not chosen yet"],
 
@@ -196,6 +215,36 @@ window.ECI_DATA = {
           risk: "Low wow factor on video; works with before/after statics.",
         },
       ],
+    },
+    {
+      id: "baby", label: "Baby & Kids", emoji: "🧸",
+      palette: { main: "#5B7DB1", accent: "#F4A6A6", n1: "#FBF8F4", n2: "#23283A" },
+      nameParts: { pre: ["Tot", "Bub", "Nest", "Kiddo", "Lulla", "Pip", "Bloom", "Coco"], suf: ["ly", "bee", "co", "nest", "io", "kin", "loo", "bo"] },
+      voice: ["gentle", "reassuring", "practical"], ideas: [],
+    },
+    {
+      id: "toys", label: "Toys & Games", emoji: "🎲",
+      palette: { main: "#6D28D9", accent: "#FACC15", n1: "#FBFAFF", n2: "#1E1633" },
+      nameParts: { pre: ["Play", "Joy", "Zip", "Boo", "Fun", "Wiz", "Hop", "Toy"], suf: ["ly", "io", "zo", "co", "bit", "box", "pop", "tak"] },
+      voice: ["playful", "bright", "fun"], ideas: [],
+    },
+    {
+      id: "fashion", label: "Fashion", emoji: "👕",
+      palette: { main: "#1C1C1C", accent: "#C8A97E", n1: "#F7F4EF", n2: "#111111" },
+      nameParts: { pre: ["Mode", "Loom", "Thread", "Atlas", "Nord", "Vale", "Rue", "Sable"], suf: ["ly", "wear", "co", "ora", "io", "lane", "rue", "en"] },
+      voice: ["confident", "clean", "modern"], ideas: [],
+    },
+    {
+      id: "jewelry", label: "Jewelry & Accessories", emoji: "💍",
+      palette: { main: "#3E2C41", accent: "#D4AF37", n1: "#FAF6F2", n2: "#1A1219" },
+      nameParts: { pre: ["Luna", "Aura", "Gem", "Halo", "Elle", "Opal", "Iris", "Vela"], suf: ["ly", "co", "ora", "elle", "io", "ra", "lia", "ette"] },
+      voice: ["elegant", "warm", "personal"], ideas: [],
+    },
+    {
+      id: "beauty", label: "Beauty", emoji: "💄",
+      palette: { main: "#9D4B6B", accent: "#F2C6B4", n1: "#FDF7F5", n2: "#2A1820" },
+      nameParts: { pre: ["Glow", "Dew", "Bloom", "Silk", "Rose", "Pure", "Lux", "Velv"], suf: ["ly", "co", "ora", "ia", "io", "skin", "lab", "e"] },
+      voice: ["soft", "honest", "uplifting"], ideas: [],
     },
   ],
 

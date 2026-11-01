@@ -30,9 +30,14 @@
     email: "", businessAddress: "", imageUrl: "", freeShipping: true,
     checkoutUrl: "", checkoutLinks: ["", "", ""], checklist: {},
     discountCode: "WELCOME10", discountPct: 10,
+    ptab: "db", dbNiche: "", dbQ: "", dbMax: "", dbSort: "score", dbRising: false, dbShow: 24,
+    aiKeywords: "", aiResults: [], aiRemember: false, aiKey: "", pickedId: "", costIsEstimate: false,
   };
 
   let S = load();
+  let AIKEY = S.aiRemember ? S.aiKey || "" : "";
+  if (!S.aiRemember) S.aiKey = "";
+  const P = window.ECI_PRODUCTS || { items: [], updated: "", source: "" };
 
   function load() {
     try { const raw = localStorage.getItem(KEY); if (raw) return Object.assign({}, DEFAULTS, JSON.parse(raw)); } catch (_) { /* storage unavailable */ }
@@ -63,8 +68,8 @@
   // ---------- validation ----------
   function problems(step) {
     const c = ctx();
-    if (step === 1 && !c.productName.trim()) return "Pick a starter idea or type your own product name.";
-    if (step === 1 && !c.customer.trim()) return "Say who the customer is.";
+    if (step === 1 && !c.productName.trim()) return "Pick a product (Use this product) or type your own.";
+    if (step === 1 && !c.customer.trim()) return "Fill in the product details (who it's for) or press ✨ Fill details with AI.";
     if (step === 2 && (c.cost == null || c.cost <= 0)) return "Enter your supplier cost including shipping (ask the supplier for a quote).";
     if (step === 2 && (c.price == null || c.price <= 0)) return "Enter the price you'll sell at.";
     if (step === 4 && !c.brand.trim()) return "Pick a brand name or type one.";
@@ -89,28 +94,159 @@
         <select data-k="stage">${["no store yet", "store open, no sales", "first product live", "already selling daily"].map((x) => `<option ${x === S.stage ? "selected" : ""}>${x}</option>`).join("")}</select></div>
     </div>`;
 
+  // ---------- product finder ----------
+  const rate = () => (D.countries.find((x) => x.code === S.country) || {}).usd || 1;
+  const local = (usd) => (usd == null ? null : +(usd * rate()).toFixed(2));
+  const sym = () => (D.countries.find((x) => x.code === S.country) || {}).symbol || "$";
+  const shortQ = (t) => String(t).replace(/[^\w\s&'-]/g, " ").split(/\s+/).filter(Boolean).slice(0, 5).join(" ");
+
+  function links(name) {
+    const q = encodeURIComponent(shortQ(name)), cc = S.country;
+    const amz = D.amazon[cc] || "amazon.com";
+    return [
+      ["Meta Ad Library", `https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=${cc}&q=${q}&search_type=keyword_unordered&media_type=all`],
+      ["TikTok", `https://www.tiktok.com/search?q=${q}`],
+      ["Amazon", `https://www.${amz}/s?k=${q}`],
+      ["AliExpress", `https://www.aliexpress.com/wholesale?SearchText=${q}`],
+      ["Google Trends", `https://trends.google.com/trends/explore?date=today%2012-m&geo=${cc}&q=${q}`],
+    ].map(([l, u]) => `<a class="chip copy-btn" href="${e(u)}" target="_blank" rel="noopener">${l} ↗</a>`).join(" ");
+  }
+
+  function dbItems() {
+    const q = S.dbQ.trim().toLowerCase(), max = G.num(S.dbMax);
+    let list = P.items.filter((x) =>
+      (!S.dbNiche || x.n === S.dbNiche) && (!q || x.t.toLowerCase().includes(q)) &&
+      (max == null || (x.p != null && x.p <= max)) && (!S.dbRising || x.tr === "Rising"));
+    const key = { score: (x) => x.s || 0, margin: (x) => x.m || 0, ads: (x) => (x.ads || 0) * 1e6 + (x.l || 0), price: (x) => -(x.p || 1e9) }[S.dbSort] || ((x) => x.s);
+    return list.sort((a, b) => key(b) - key(a));
+  }
+
+  function card(x, useAttr) {
+    const s$ = sym(), conv = rate() !== 1;
+    const tCls = x.tr === "Rising" ? "good" : x.tr === "Declining" ? "bad" : "warn";
+    const price = x.p != null ? `${G.money(x.p, "$")}${conv ? ` <small>≈ ${G.money(local(x.p), s$)}</small>` : ""}` : "—";
+    return `<div class="pcard ${S.pickedId === x.id ? "picked" : ""}">
+      <div class="pcard-top"><span class="badge ${x.s >= 90 ? "good" : x.s >= 75 ? "warn" : "bad"}">${x.s != null ? "Score " + x.s : "Live"}</span>${x.tr && x.tr !== "Unknown" ? `<span class="badge ${tCls}">${e(x.tr)}</span>` : ""}<small>${e(x.n || "")}</small></div>
+      <b class="pcard-title">${e(x.t)}</b>
+      <div class="pcard-stats"><span>Sells for <b>${price}</b></span>${x.c != null ? `<span>Est. cost <b>${G.money(x.c, "$")}</b></span>` : ""}${x.m != null ? `<span>Margin <b>${x.m}%</b></span>` : ""}${x.ads ? `<span><b>${x.ads}</b> ads running</span>` : ""}${x.l ? `<span><b>${x.l.toLocaleString()}</b> likes</span>` : ""}</div>
+      ${x.why ? `<p class="hint">${e(x.why)}</p>` : ""}
+      ${x.ev ? `<p class="hint"><b>Evidence:</b> ${e(x.ev)}</p>` : ""}
+      ${x.src && x.src.length ? `<p class="hint">Sources: ${x.src.slice(0, 4).map((s) => `<a href="${e(s.url)}" target="_blank" rel="noopener">${e(s.title || "link")}</a>`).join(" · ")}</p>` : ""}
+      ${x.f ? `<p class="hint warnline">⚠ ${e(x.f)}</p>` : ""}
+      <div class="pcard-links">${links(x.t)}</div>
+      <button type="button" class="${S.pickedId === x.id ? "secondary" : "primary"} pcard-use" ${useAttr}>${S.pickedId === x.id ? "✓ Selected" : "Use this product"}</button>
+    </div>`;
+  }
+
+  function dbList() {
+    const list = dbItems();
+    return list.length ? `<p class="hint">${list.length} products · ${e(P.source)} data from ${e(P.updated)} · prices in USD${rate() !== 1 ? `, ≈ local at an approximate rate` : ""}</p>
+      <div class="pgrid">${list.slice(0, S.dbShow).map((x) => card(x, `data-use-db="${x.id}"`)).join("")}</div>
+      ${list.length > S.dbShow ? `<button type="button" class="secondary" id="db-more" style="margin-top:12px">Show more (${list.length - S.dbShow})</button>` : ""}`
+      : `<p class="muted">No products match. Clear a filter, or try <b>Live AI search</b>.</p>`;
+  }
+
+  function aiList() {
+    return (S.aiResults || []).map((r, i) => card({ id: "ai-" + i, t: r.name, n: r.niche, p: r.typical_price_usd || null, why: r.why, ev: r.evidence, src: r.sources, f: r.risks }, `data-use-ai="${i}"`)).join("");
+  }
+
   R.product = () => {
     const niche = D.niches.find((n) => n.id === S.nicheId);
+    const cats = [...new Set(P.items.map((x) => x.n))];
+    const tabs = [["db", `🔥 Winning products (${P.items.length})`], ["ai", "🤖 Live AI search"], ["own", "✍️ My own idea"]];
     return `
-    <h1>Pick a product to test</h1>
-    <p class="muted">Choose a niche, then a starter idea, or type your own product. Everything stays editable.</p>
-    <div class="grid3" style="margin-bottom:16px">${D.niches.map((n) => `<button type="button" class="tile ${n.id === S.nicheId ? "selected" : ""}" data-niche="${n.id}"><div class="emoji">${n.emoji}</div><b>${e(n.label)}</b></button>`).join("")}</div>
-    ${niche ? `<h2>Starter ideas in ${e(niche.label)}</h2>
-      <div class="grid2" style="margin-bottom:8px">${niche.ideas.map((it, i) => `<button type="button" class="tile ${i === S.ideaIdx ? "selected" : ""}" data-idea="${i}"><b>${e(it.name)}</b><div class="hint">${e(it.customer)}</div></button>`).join("")}
-      <button type="button" class="tile ${S.ideaIdx === -2 ? "selected" : ""}" data-idea="-2"><b>✍️ My own product</b><div class="hint">Start from a blank form</div></button></div>
-      <p class="hint">Starter ideas are leads to research, not proven winners. Check the Meta Ad Library (ads running 7+ days), Amazon "bought in past month" and TikTok Shop best-sellers before you commit.</p>` : ""}
-    ${S.risk ? `<div class="callout"><b>Watch out:</b> ${e(S.risk)}</div>` : ""}
-    <div class="grid2">
-      <div class="field"><label>Product name</label><input type="text" data-k="productName" value="${e(S.productName)}" placeholder="e.g. Reusable pet hair roller"></div>
-      <div class="field"><label>Who is it for?</label><input type="text" data-k="customer" value="${e(S.customer)}" placeholder="e.g. dog owners in the US, 28–45"></div>
-      <div class="field"><label>The problem they have</label><input type="text" data-k="problem" value="${e(S.problem)}"></div>
-      <div class="field"><label>The outcome they want</label><input type="text" data-k="outcome" value="${e(S.outcome)}"></div>
-      <div class="field"><label>Key features <small>(one per line)</small></label><textarea data-k="featuresText">${e(S.featuresText)}</textarea></div>
-      <div class="field"><label>How it works <small>(3 steps, one per line)</small></label><textarea data-k="howText">${e(S.howText)}</textarea></div>
-      <div class="field"><label>What's in the box <small>(one per line)</small></label><textarea data-k="boxText">${e(S.boxText)}</textarea></div>
-      <div class="field"><label>Specs <small>(from the supplier listing)</small></label><textarea data-k="specs" placeholder="Size, material, weight… only facts you checked">${e(S.specs)}</textarea></div>
-    </div>`;
+    <h1>Find a product to test</h1>
+    <p class="muted">Start from evidence: products with real ads and demand. Check each one live with the research buttons before you decide.</p>
+    <div class="chips" style="margin-bottom:16px">${tabs.map(([k, l]) => `<button type="button" class="chip ${S.ptab === k ? "selected" : ""}" data-ptab="${k}">${l}</button>`).join("")}</div>
+
+    ${S.ptab === "db" ? `
+      <div class="filters">
+        <select data-dbf="dbNiche" aria-label="Niche"><option value="">All niches</option>${cats.map((c) => `<option ${c === S.dbNiche ? "selected" : ""}>${e(c)}</option>`).join("")}</select>
+        <input type="text" data-dbf="dbQ" value="${e(S.dbQ)}" placeholder="Search e.g. cat, car, kitchen">
+        <input type="number" data-dbf="dbMax" value="${e(S.dbMax)}" placeholder="Max price $" min="0">
+        <select data-dbf="dbSort" aria-label="Sort">${[["score", "Best score"], ["margin", "Best margin"], ["ads", "Most ads / likes"], ["price", "Lowest price"]].map(([v, l]) => `<option value="${v}" ${S.dbSort === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+        <label class="inline"><input type="checkbox" data-dbf="dbRising" ${S.dbRising ? "checked" : ""}> Rising only</label>
+      </div>
+      <div id="db-list">${dbList()}</div>` : ""}
+
+    ${S.ptab === "ai" ? `
+      <div class="callout">Claude searches the web right now (Ad Library, Amazon, TikTok Shop, trend news) and returns products <b>with sources</b>. It uses your own Claude API key, which costs a few cents per search and is sent only to Anthropic. <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get a key ↗</a></div>
+      <div class="grid2">
+        <div class="field"><label>Claude API key</label><input type="password" id="ai-key" value="${e(AIKEY)}" placeholder="sk-ant-…" autocomplete="off">
+          <label class="inline hint"><input type="checkbox" id="ai-remember" ${S.aiRemember ? "checked" : ""}> Remember on this device</label></div>
+        <div class="field"><label>What to look for</label><input type="text" data-k="aiKeywords" value="${e(S.aiKeywords)}" placeholder="e.g. pet products, winter car gadgets, kitchen"></div>
+      </div>
+      <button type="button" class="primary" id="ai-find">🔎 Find products selling now in ${e(ctx().countryName)}</button>
+      <div id="ai-status" class="hint" style="margin-top:8px"></div>
+      <div class="pgrid" id="ai-list" style="margin-top:12px">${aiList()}</div>` : ""}
+
+    ${S.ptab === "own" ? `
+      <div class="grid3" style="margin-bottom:16px">${D.niches.map((n) => `<button type="button" class="tile ${n.id === S.nicheId ? "selected" : ""}" data-niche="${n.id}"><div class="emoji">${n.emoji}</div><b>${e(n.label)}</b></button>`).join("")}</div>
+      ${niche && niche.ideas.length ? `<h2>Starter ideas in ${e(niche.label)}</h2>
+        <div class="grid2" style="margin-bottom:8px">${niche.ideas.map((it, i) => `<button type="button" class="tile ${i === S.ideaIdx ? "selected" : ""}" data-idea="${i}"><b>${e(it.name)}</b><div class="hint">${e(it.customer)}</div></button>`).join("")}</div>` : ""}
+      <button type="button" class="tile ${S.ideaIdx === -2 ? "selected" : ""}" data-idea="-2" style="margin-bottom:12px"><b>✍️ Blank form</b><div class="hint">Type your own product below</div></button>
+      ${S.productName ? `<div class="pcard-links" style="margin-bottom:12px">Check it live: ${links(S.productName)}</div>` : ""}` : ""}
+
+    ${S.productName || S.ptab === "own" ? `
+      <h2 style="margin-top:24px" id="details">Product details ${S.productName ? `<small>· ${e(S.productName)}</small>` : ""}</h2>
+      ${S.risk ? `<div class="callout"><b>Watch out:</b> ${e(S.risk)}</div>` : ""}
+      ${S.productName ? `<button type="button" class="secondary" id="ai-fill">✨ Fill details with AI</button> <span class="hint" id="fill-status">${AIKEY ? "" : "Needs your Claude API key (Live AI search tab). Or type them yourself."}</span>` : ""}
+      <div class="grid2" style="margin-top:12px">
+        <div class="field"><label>Product name</label><input type="text" data-k="productName" value="${e(S.productName)}" placeholder="e.g. Reusable pet hair roller"></div>
+        <div class="field"><label>Who is it for?</label><input type="text" data-k="customer" value="${e(S.customer)}" placeholder="e.g. cat owners in Denmark"></div>
+        <div class="field"><label>The problem they have</label><input type="text" data-k="problem" value="${e(S.problem)}"></div>
+        <div class="field"><label>The outcome they want</label><input type="text" data-k="outcome" value="${e(S.outcome)}"></div>
+        <div class="field"><label>Key features <small>(one per line)</small></label><textarea data-k="featuresText">${e(S.featuresText)}</textarea></div>
+        <div class="field"><label>How it works <small>(3 steps, one per line)</small></label><textarea data-k="howText">${e(S.howText)}</textarea></div>
+        <div class="field"><label>What's in the box <small>(one per line)</small></label><textarea data-k="boxText">${e(S.boxText)}</textarea></div>
+        <div class="field"><label>Specs <small>(from the supplier listing)</small></label><textarea data-k="specs" placeholder="Size, material, weight… only facts you checked">${e(S.specs)}</textarea></div>
+      </div>` : ""}`;
   };
+
+  function pick(x) {
+    const nid = D.nicheMap[x.n] || S.nicheId;
+    if (nid !== S.nicheId) { S.palette = null; S.voice = []; }
+    const today = P.updated;
+    Object.assign(S, {
+      pickedId: x.id, productName: x.t, nicheId: nid || "", ideaIdx: -1,
+      customer: "", problem: "", outcome: "", featuresText: "", boxText: "", howText: "", specs: "", alternative: "",
+      risk: x.f || "",
+      compPrice: x.p != null ? String(local(x.p)) : "",
+      cost: x.c != null ? String(local(x.c)) : "", costIsEstimate: x.c != null, price: "",
+      evidence: x.ev ? `${x.ev}${x.src && x.src.length ? " (sources: " + x.src.map((s) => s.url).join(", ") + ")" : ""}`
+        : [`${P.source} (${today}): product score ${x.s}/100`, x.tr && x.tr !== "Unknown" ? `trend ${x.tr}` : "", x.ads ? `${x.ads} ads running` : "", x.l ? `${x.l.toLocaleString()} likes` : "", x.m != null ? `est. margin ${x.m}%` : ""].filter(Boolean).join(", ") + ". Verify in Meta Ad Library before testing.",
+      scoresTouched: false,
+    });
+    if (x.s != null) S.scores[4] = x.s >= 95 ? 8 : x.s >= 85 ? 7 : x.s >= 75 ? 6 : 5;
+    save(); render();
+    setTimeout(() => { const d = $("#details"); if (d) d.scrollIntoView({ behavior: "smooth" }); }, 50);
+  }
+
+  async function aiFind() {
+    const st = $("#ai-status");
+    if (!AIKEY) { st.textContent = "⚠ Paste your Claude API key first."; return; }
+    const btn = $("#ai-find"); btn.disabled = true;
+    st.textContent = "🔎 Searching the web… this takes 30–90 seconds.";
+    try {
+      const out = await window.ECI_AI.findProducts(AIKEY, { keywords: S.aiKeywords, niche: "", countryName: ctx().countryName });
+      S.aiResults = out.products || []; save();
+      $("#ai-list").innerHTML = aiList();
+      st.textContent = `Found ${S.aiResults.length} products. Open the sources and research links to verify.`;
+    } catch (err) { st.textContent = "⚠ " + err.message; }
+    btn.disabled = false;
+  }
+
+  async function aiFill() {
+    const st = $("#fill-status");
+    if (!AIKEY) { st.textContent = "⚠ Add your Claude API key in the Live AI search tab first."; return; }
+    st.textContent = "✨ Writing…";
+    try {
+      const o = await window.ECI_AI.fillProduct(AIKEY, { productName: S.productName, countryName: ctx().countryName, notes: S.risk });
+      Object.assign(S, { customer: o.customer, problem: o.problem, outcome: o.outcome, featuresText: (o.features || []).join("\n"), howText: (o.how_it_works || []).join("\n"), boxText: (o.in_the_box || []).join("\n"), alternative: o.alternative, risk: [S.risk, o.risk].filter(Boolean).join(" ") });
+      save(); render();
+      setTimeout(() => { const d = $("#details"); if (d) d.scrollIntoView(); }, 50);
+    } catch (err) { st.textContent = "⚠ " + err.message; }
+  }
 
   R.numbers = () => {
     const c = ctx();
@@ -118,7 +254,7 @@
     <h1>Bring your evidence and numbers</h1>
     <p class="muted">Claude, or any tool, can't see which products make money. These numbers decide whether the product can survive paid ads.</p>
     <div class="grid2">
-      <div class="field"><label>Supplier cost incl. shipping (${e(c.symbol.trim())})</label><input type="number" step="0.01" min="0" data-k="cost" value="${e(S.cost)}" placeholder="e.g. 4.20"><div class="hint">From your supplier app or agent quote.</div></div>
+      <div class="field"><label>Supplier cost incl. shipping (${e(c.symbol.trim())})</label><input type="number" step="0.01" min="0" data-k="cost" value="${e(S.cost)}" placeholder="e.g. 4.20"><div class="hint">From your supplier app or agent quote.</div>${S.costIsEstimate ? `<div class="hint warnline">⚠ Pre-filled from the product database estimate. Replace it with your real supplier quote.</div>` : ""}</div>
       <div class="field"><label>What competitors charge (${e(c.symbol.trim())})</label><input type="number" step="0.01" min="0" data-k="compPrice" value="${e(S.compPrice)}" placeholder="e.g. 24.99"></div>
       <div class="field"><label>Your selling price (${e(c.symbol.trim())})</label><input type="number" step="0.01" min="0" data-k="price" value="${e(S.price)}"><div class="hint">Aim for at least 3× your cost. <button type="button" class="chip copy-btn" id="suggest-price">Suggest</button></div></div>
       <div class="field"><label>Target profit per order (${e(c.symbol.trim())})</label><input type="number" step="0.01" min="0" data-k="target" value="${e(S.target)}"></div>
@@ -315,7 +451,12 @@
     const t = ev.target;
     if (t.dataset.k) {
       S[t.dataset.k] = t.value;
+      if (t.dataset.k === "country") {
+        const cc = D.countries.find((x) => x.code === t.value) || {};
+        S.target = cc.target ?? 10; S.feeFixed = cc.feeFixed ?? 0.3;
+      }
       if (["cost", "compPrice"].includes(t.dataset.k) && !S.scoresTouched) S.scores[3] = G.suggestMarkupScore(G.num(S.cost), G.num(S.compPrice));
+      if (t.dataset.k === "cost") S.costIsEstimate = false;
       if (t.dataset.k === "evidence" && !S.scoresTouched) S.scores[4] = t.value.trim().length > 40 ? 7 : t.value.trim() ? 5 : 3;
     }
     if (t.dataset.score != null) { S.scores[+t.dataset.score] = +t.value; S.scoresTouched = true; liveScore(); }
@@ -323,6 +464,12 @@
     if (t.id === "voice") S.voice = t.value.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 3);
     if (t.dataset.link != null) S.checkoutLinks[+t.dataset.link] = t.value;
     if (t.dataset.check != null) S.checklist[t.dataset.check] = t.checked;
+    if (t.dataset.dbf) {
+      S[t.dataset.dbf] = t.type === "checkbox" ? t.checked : t.value; S.dbShow = 24;
+      const l = $("#db-list"); if (l) l.innerHTML = dbList();
+    }
+    if (t.id === "ai-key") { AIKEY = t.value.trim(); S.aiKey = S.aiRemember ? AIKEY : ""; }
+    if (t.id === "ai-remember") { S.aiRemember = t.checked; S.aiKey = t.checked ? AIKEY : ""; }
     save(); side();
     const id = STEPS[S.step].id;
     if (id === "page") livePage();
@@ -334,12 +481,22 @@
     const b = ev.target.closest("button");
     if (!b) return;
     if (b.dataset.go != null) return go(+b.dataset.go);
+    if (b.dataset.ptab) { S.ptab = b.dataset.ptab; save(); return render(); }
+    if (b.dataset.useDb) { const x = P.items.find((i) => i.id === b.dataset.useDb); if (x) pick(x); return; }
+    if (b.dataset.useAi != null) {
+      const r = S.aiResults[+b.dataset.useAi];
+      if (r) pick({ id: "ai-" + b.dataset.useAi, t: r.name, n: r.niche, p: r.typical_price_usd || null, ev: r.evidence, src: r.sources, f: r.risks });
+      return;
+    }
+    if (b.id === "db-more") { S.dbShow += 24; save(); const l = $("#db-list"); if (l) l.innerHTML = dbList(); return; }
+    if (b.id === "ai-find") return aiFind();
+    if (b.id === "ai-fill") return aiFill();
     if (b.dataset.niche) {
       if (S.nicheId !== b.dataset.niche) { S.nicheId = b.dataset.niche; S.ideaIdx = -1; S.palette = null; S.voice = []; }
       save(); return render();
     }
     if (b.dataset.idea != null) {
-      const i = +b.dataset.idea; S.ideaIdx = i;
+      const i = +b.dataset.idea; S.ideaIdx = i; S.pickedId = ""; S.costIsEstimate = false;
       const niche = D.niches.find((n) => n.id === S.nicheId);
       if (i >= 0 && niche) {
         const it = niche.ideas[i];
