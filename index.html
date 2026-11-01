@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Store Wizard</title>
+  <meta name="description" content="Click Next, Next, Next and get a ready-made dropshipping store: product scoring, margin check, brand, product page, ads and a downloadable store." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brandmark"><span class="dot"></span> Store Wizard <small>by ecom-creator-intel</small></div>
+    <div class="topbar-actions">
+      <button class="ghost" id="btn-reset" type="button">Start over</button>
+    </div>
+  </header>
+
+  <nav class="stepper" id="stepper" aria-label="Progress"></nav>
+
+  <main class="wrap">
+    <section id="step-view" class="card" aria-live="polite"></section>
+    <aside class="side" id="side"></aside>
+  </main>
+
+  <footer class="navbar">
+    <button class="secondary" id="btn-back" type="button">← Back</button>
+    <div class="navbar-hint" id="nav-hint"></div>
+    <button class="primary" id="btn-next" type="button">Next →</button>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="generators.js"></script>
+  <script src="storefront.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
