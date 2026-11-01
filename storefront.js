@@ -40,7 +40,8 @@ header{display:flex;justify-content:space-between;align-items:center;padding:16p
 nav a{margin-left:16px;font-size:.9rem;text-decoration:none;opacity:.8}
 .hero{max-width:1100px;margin:auto;padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start}
 @media(max-width:820px){.hero{grid-template-columns:1fr;gap:20px}nav{display:none}}
-.hero img{border-radius:18px;aspect-ratio:1/1;object-fit:cover;width:100%;background:#fff}
+.hero #main-img{border-radius:18px;aspect-ratio:1/1;object-fit:cover;width:100%;background:#fff}
+.thumbs{display:flex;gap:8px;margin-top:10px;overflow-x:auto}.thumbs img{width:64px;height:64px;object-fit:cover;border-radius:10px;cursor:pointer;border:2px solid transparent;flex:0 0 auto}.thumbs img:hover{border-color:var(--main)}
 h1{font-size:clamp(1.7rem,4vw,2.6rem);line-height:1.1;letter-spacing:-.02em;margin:.2em 0}
 .sub{font-size:1.1rem;opacity:.85}
 ul.ben{list-style:none;padding:0;margin:18px 0}ul.ben li{padding:6px 0 6px 30px;position:relative}
@@ -74,7 +75,7 @@ footer h3{font-size:1rem}
 
 <main>
 <div class="hero">
-  <img src="${img}" alt="${e(s.productName)}">
+  <div><img id="main-img" src="${img}" alt="${e(s.productName)}">${(s.images || []).length > 1 ? `<div class="thumbs">${s.images.slice(0, 8).map((u, i) => `<img src="${e(u)}" alt="" onclick="document.getElementById('main-img').src=this.src" class="${i === 0 ? "on" : ""}">`).join("")}</div>` : ""}</div>
   <div>
     <h1>${e(p.headline)}</h1>
     <p class="sub">${e(p.sub)}</p>

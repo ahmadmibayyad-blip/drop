@@ -268,13 +268,16 @@ ${window.ECI_DATA.launchChecklist.map((c) => `- [ ] ${c}`).join("\n")}
 
   G.csvCell = (v) => { const t = String(v ?? ""); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
   G.shopifyCsv = (s, p) => {
-    const head = ["Handle", "Title", "Body (HTML)", "Vendor", "Type", "Tags", "Published", "Option1 Name", "Option1 Value", "Variant SKU", "Variant Inventory Policy", "Variant Fulfillment Service", "Variant Price", "Variant Compare At Price", "Variant Requires Shipping", "Variant Taxable", "Image Src", "SEO Title", "SEO Description", "Cost per item", "Status"];
+    const head = ["Handle", "Title", "Body (HTML)", "Vendor", "Type", "Tags", "Published", "Option1 Name", "Option1 Value", "Variant SKU", "Variant Inventory Policy", "Variant Fulfillment Service", "Variant Price", "Variant Compare At Price", "Variant Requires Shipping", "Variant Taxable", "Image Src", "Image Position", "SEO Title", "SEO Description", "Cost per item", "Status"];
     const handle = G.slug(s.brand + " " + s.productName);
     const rows = p.tiers.map((t, i) => {
       const first = i === 0;
       return [handle, first ? s.productName : "", first ? G.pageHtmlBody(s, p) : "", first ? s.brand : "", first ? (s.nicheLabel || "") : "", first ? [s.nicheLabel, "dropshipping"].filter(Boolean).join(", ") : "", first ? "FALSE" : "",
         first ? "Bundle" : "", t.label, `${handle}-${t.qty}`.toUpperCase().slice(0, 40), "deny", "manual", t.price.toFixed(2), t.compareAt ? t.compareAt.toFixed(2) : "", "TRUE", "TRUE",
-        first ? (s.imageUrl || "") : "", first ? p.seoTitle : "", first ? p.seoDesc : "", s.cost != null ? (s.cost * t.qty).toFixed(2) : "", first ? "draft" : ""];
+        first ? (s.imageUrl || "") : "", first && s.imageUrl ? "1" : "", first ? p.seoTitle : "", first ? p.seoDesc : "", s.cost != null ? (s.cost * t.qty).toFixed(2) : "", first ? "draft" : ""];
+    });
+    (s.images || []).slice(1, 10).forEach((u, i) => {
+      const r = head.map(() => ""); r[0] = handle; r[head.indexOf("Image Src")] = u; r[head.indexOf("Image Position")] = String(i + 2); rows.push(r);
     });
     return [head, ...rows].map((r) => r.map(G.csvCell).join(",")).join("\n");
   };

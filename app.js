@@ -32,6 +32,7 @@
     discountCode: "WELCOME10", discountPct: 10,
     ptab: "db", dbNiche: "", dbQ: "", dbMax: "", dbSort: "score", dbRising: false, dbShow: 24,
     aiKeywords: "", aiResults: [], aiRemember: false, aiKey: "", pickedId: "", costIsEstimate: false,
+    importUrl: "", importKind: "supplier", images: [],
   };
 
   let S = load();
@@ -60,6 +61,7 @@
       palette: S.palette || (niche ? niche.palette : { main: "#2F5D50", accent: "#F2A541", n1: "#FAF7F2", n2: "#1E2522" }),
       voice: S.voice.length ? S.voice : (niche ? niche.voice : ["clear", "friendly", "honest"]),
       nameIdeas: G.brandNames(niche, S.nameSeed),
+      images: S.images || [], imageUrl: (S.images && S.images[0]) || S.imageUrl,
       shipShort: "Tracked shipping",
       guaranteeShort: (S.guarantee || "Money-back guarantee").split(".")[0],
     };
@@ -125,7 +127,13 @@
     const s$ = sym(), conv = rate() !== 1;
     const tCls = x.tr === "Rising" ? "good" : x.tr === "Declining" ? "bad" : "warn";
     const price = x.p != null ? `${G.money(x.p, "$")}${conv ? ` <small>≈ ${G.money(local(x.p), s$)}</small>` : ""}` : "—";
+    const nd = D.niches.find((n) => n.id === D.nicheMap[x.n]) || {};
+    const pal = nd.palette || { main: "#2F5D50", accent: "#F2A541" };
+    const img = x.img
+      ? `<img src="${e(x.img)}" alt="${e(x.t)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'pimg-ph',textContent:'${nd.emoji || "🛍️"}'}))">`
+      : `<div class="pimg-ph">${nd.emoji || "🛍️"}</div>`;
     return `<div class="pcard ${S.pickedId === x.id ? "picked" : ""}">
+      <div class="pimg" style="--a:${pal.main};--b:${pal.accent}">${img}${x.bought ? `<span class="pimg-tag">${e(x.bought)}</span>` : ""}</div>
       <div class="pcard-top"><span class="badge ${x.s >= 90 ? "good" : x.s >= 75 ? "warn" : "bad"}">${x.s != null ? "Score " + x.s : "Live"}</span>${x.tr && x.tr !== "Unknown" ? `<span class="badge ${tCls}">${e(x.tr)}</span>` : ""}<small>${e(x.n || "")}</small></div>
       <b class="pcard-title">${e(x.t)}</b>
       <div class="pcard-stats"><span>Sells for <b>${price}</b></span>${x.c != null ? `<span>Est. cost <b>${G.money(x.c, "$")}</b></span>` : ""}${x.m != null ? `<span>Margin <b>${x.m}%</b></span>` : ""}${x.ads ? `<span><b>${x.ads}</b> ads running</span>` : ""}${x.l ? `<span><b>${x.l.toLocaleString()}</b> likes</span>` : ""}</div>
@@ -222,6 +230,34 @@
     setTimeout(() => { const d = $("#details"); if (d) d.scrollIntoView({ behavior: "smooth" }); }, 50);
   }
 
+  async function importLink() {
+    const st = $("#import-status"), url = (S.importUrl || "").trim();
+    if (!/^https?:\/\//.test(url)) { st.textContent = "⚠ Paste a full link starting with https://"; return; }
+    if (!AIKEY) { st.textContent = "⚠ Paste your Claude API key first."; return; }
+    const btn = $("#import-btn"); btn.disabled = true; st.textContent = "⏳ Reading the page… 20–60 seconds.";
+    try {
+      const o = await window.ECI_AI.importFromUrl(AIKEY, url);
+      if (!o.ok) { st.textContent = "⚠ " + (o.error || "Couldn't read that page.") + " Try the supplier's AliExpress/CJ link, or add photos by URL."; btn.disabled = false; return; }
+      const c = ctx(), same = (o.currency || "").toUpperCase() === c.currency;
+      const supplier = S.importKind !== "competitor";
+      if (supplier) S.images = [...new Set([...(o.images || []), ...(S.images || [])])].slice(0, 10);
+      if (o.features && o.features.length) S.featuresText = o.features.join("\n");
+      if (o.specs) S.specs = o.specs;
+      if (o.in_the_box && o.in_the_box.length) S.boxText = o.in_the_box.join("\n");
+      if (o.shipping_info && supplier && !S.shippingPolicy) S.shippingPolicy = o.shipping_info;
+      if (!S.productName && o.title) S.productName = o.title;
+      let priceNote = "";
+      if (o.price) {
+        if (same) { if (supplier) { S.cost = String(o.price); S.costIsEstimate = false; } else S.compPrice = String(o.price); }
+        else priceNote = ` Price on page: ${o.price} ${o.currency}. Convert it to ${c.currency} on the Numbers step.`;
+        S.evidence = [S.evidence, `${supplier ? "Supplier" : "Competitor"} listing ${url}: ${o.price} ${o.currency}.`].filter(Boolean).join(" ");
+      }
+      save(); render();
+      const s2 = $("#import-status");
+      if (s2) s2.textContent = `✓ Imported ${supplier ? (o.images || []).length + " photos, " : ""}features and specs.${priceNote}${supplier ? "" : " Photos skipped: never use a competitor's photos."}`;
+    } catch (err) { st.textContent = "⚠ " + err.message; btn.disabled = false; }
+  }
+
   async function aiFind() {
     const st = $("#ai-status");
     if (!AIKEY) { st.textContent = "⚠ Paste your Claude API key first."; return; }
@@ -299,9 +335,23 @@
     const p = G.page(c);
     return `
     <h1>Your product page</h1>
-    <p class="muted">Written from your answers. Fill in your real policies; they appear on the page, in the FAQ and in the footer.</p>
+    <p class="muted">Written from your answers. Import photos and facts from your supplier's listing, then fill in your real policies.</p>
+    <div class="import-box">
+      <h2>🔗 Import from a link</h2>
+      <p class="hint">Paste a product link (AliExpress, CJ, Amazon, Temu, Alibaba or a Shopify store). Claude opens the page and pulls the photos, price, features and specs.</p>
+      <input type="url" data-k="importUrl" value="${e(S.importUrl)}" placeholder="https://www.aliexpress.com/item/…">
+      <div class="chips" style="margin:10px 0">
+        <label class="inline"><input type="radio" name="ik" data-ik="supplier" ${S.importKind !== "competitor" ? "checked" : ""}> It's my <b>supplier</b>: use the photos and set my cost</label>
+        <label class="inline"><input type="radio" name="ik" data-ik="competitor" ${S.importKind === "competitor" ? "checked" : ""}> It's a <b>competitor</b>: facts and price only, no photos</label>
+      </div>
+      ${AIKEY ? "" : `<div class="field"><label>Claude API key</label><input type="password" id="ai-key" placeholder="sk-ant-…" autocomplete="off"><div class="hint">Needed to read the page. Costs about a cent. <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">Get a key ↗</a></div></div>`}
+      <button type="button" class="primary" id="import-btn">Import product</button> <span class="hint" id="import-status"></span>
+    </div>
+    <div class="field"><label>Product photos <small>(first one is the main photo)</small></label>
+      <div class="gallery">${(S.images || []).map((u, i) => `<div class="thumb ${i === 0 ? "main" : ""}"><img src="${e(u)}" alt="" referrerpolicy="no-referrer" loading="lazy" data-main="${i}" title="Make main photo"><button type="button" class="x" data-rm="${i}" aria-label="Remove photo">×</button></div>`).join("") || `<p class="hint">No photos yet. Import a supplier link above or add a photo URL.</p>`}</div>
+      <div class="filters" style="margin-top:8px"><input type="url" id="add-img" placeholder="https://…/photo.jpg"><button type="button" class="secondary" id="add-img-btn">Add photo</button></div>
+      <div class="hint">Use your own or your supplier's photos, never a competitor's.</div></div>
     <div class="grid2">
-      <div class="field"><label>Product photo URL <small>(optional)</small></label><input type="url" data-k="imageUrl" value="${e(S.imageUrl)}" placeholder="https://…/photo.jpg"><div class="hint">Use your own or supplier-licensed photos, never a competitor's.</div></div>
       <div class="field"><label>Support email</label><input type="email" data-k="email" value="${e(S.email)}" placeholder="support@yourbrand.com"></div>
       <div class="field"><label>Shipping policy (real times from your supplier)</label><textarea data-k="shippingPolicy" placeholder="${e(p.ship)}">${e(S.shippingPolicy)}</textarea></div>
       <div class="field"><label>Guarantee / refund policy</label><textarea data-k="guarantee">${e(S.guarantee)}</textarea></div>
@@ -469,6 +519,7 @@
       const l = $("#db-list"); if (l) l.innerHTML = dbList();
     }
     if (t.id === "ai-key") { AIKEY = t.value.trim(); S.aiKey = S.aiRemember ? AIKEY : ""; }
+    if (t.dataset.ik) S.importKind = t.dataset.ik;
     if (t.id === "ai-remember") { S.aiRemember = t.checked; S.aiKey = t.checked ? AIKEY : ""; }
     save(); side();
     const id = STEPS[S.step].id;
@@ -478,6 +529,8 @@
   document.addEventListener("change", (ev) => { if (ev.target.dataset.check != null) { S.checklist[ev.target.dataset.check] = ev.target.checked; save(); } });
 
   document.addEventListener("click", (ev) => {
+    const im = ev.target.closest("img[data-main]");
+    if (im) { const i = +im.dataset.main; const a = S.images.splice(i, 1); S.images.unshift(a[0]); save(); return render(); }
     const b = ev.target.closest("button");
     if (!b) return;
     if (b.dataset.go != null) return go(+b.dataset.go);
@@ -490,6 +543,9 @@
     }
     if (b.id === "db-more") { S.dbShow += 24; save(); const l = $("#db-list"); if (l) l.innerHTML = dbList(); return; }
     if (b.id === "ai-find") return aiFind();
+    if (b.id === "import-btn") return importLink();
+    if (b.dataset.rm != null) { S.images.splice(+b.dataset.rm, 1); save(); return render(); }
+    if (b.id === "add-img-btn") { const v = ($("#add-img").value || "").trim(); if (/^https?:\/\//.test(v)) { S.images = [...(S.images || []), v]; save(); render(); } return; }
     if (b.id === "ai-fill") return aiFill();
     if (b.dataset.niche) {
       if (S.nicheId !== b.dataset.niche) { S.nicheId = b.dataset.niche; S.ideaIdx = -1; S.palette = null; S.voice = []; }
@@ -553,7 +609,7 @@
       version: 1, generated_by: "ecom-creator-intel store wizard",
       market: { country: c.country, country_name: c.countryName, currency: c.currency },
       budget_per_day: G.num(c.budget), supplier: c.supplier, stage: c.stage,
-      product: { name: c.productName, niche: c.nicheLabel, customer: c.customer, problem: c.problem, outcome: c.outcome, features: c.features, how_it_works: c.how, in_the_box: c.box, specs: c.specs, image_url: c.imageUrl },
+      product: { name: c.productName, niche: c.nicheLabel, customer: c.customer, problem: c.problem, outcome: c.outcome, features: c.features, how_it_works: c.how, in_the_box: c.box, specs: c.specs, image_url: c.imageUrl, images: c.images },
       numbers: { supplier_cost: c.cost, competitor_price: c.compPrice, price: c.price, fee_pct: c.feePct, fee_fixed: c.feeFixed, cpa: c.cpa, target_profit: c.target },
       evidence: c.evidence, scores: S.scores, score_total: sc.total, verdict: sc.verdict,
       brand: { name: c.brand, palette: c.palette, voice: c.voice, other_names: c.nameIdeas },

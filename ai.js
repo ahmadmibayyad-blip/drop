@@ -121,5 +121,39 @@ Never claim health, medical, slimming or safety outcomes. Never invent specs, ce
     });
   }
 
-  window.ECI_AI = { findProducts, fillProduct };
+  const IMPORT_PRODUCT = {
+    name: "import_product",
+    description: "Return the product data you read from the fetched page.",
+    strict: true,
+    input_schema: {
+      type: "object", additionalProperties: false,
+      required: ["ok", "error", "title", "price", "currency", "images", "features", "specs", "in_the_box", "shipping_info"],
+      properties: {
+        ok: { type: "boolean", description: "false if the page could not be fetched or is not a product page" },
+        error: { type: "string", description: "Why it failed, empty if ok" },
+        title: { type: "string", description: "Generic product title without brand or store name" },
+        price: { type: "number", description: "Current price on the page, 0 if not shown" },
+        currency: { type: "string" },
+        images: { type: "array", items: { type: "string" }, description: "Up to 8 absolute URLs of the main product photos (jpg/png/webp), largest size available" },
+        features: { type: "array", items: { type: "string" }, description: "Up to 6 factual features stated on the page" },
+        specs: { type: "string", description: "Size, material, weight, power etc. exactly as stated" },
+        in_the_box: { type: "array", items: { type: "string" } },
+        shipping_info: { type: "string", description: "Shipping time/cost if stated, else empty" },
+      },
+    },
+  };
+
+  async function importFromUrl(apiKey, url) {
+    return run(apiKey, {
+      system: `You extract product data from a web page. Fetch the URL with web_fetch, then call import_product.
+Only report what is on the page. Never invent specs, prices, reviews or certifications. Drop health or medical claims.
+If the page can't be fetched (blocked, login, captcha) call import_product with ok=false and explain in error.`,
+      prompt: `Fetch this product page and import it: ${url}`,
+      tools: [{ type: "web_fetch_20260209", name: "web_fetch", max_uses: 3 }, IMPORT_PRODUCT],
+      finalTool: "import_product",
+      effort: "low",
+    });
+  }
+
+  window.ECI_AI = { findProducts, fillProduct, importFromUrl };
 })();
